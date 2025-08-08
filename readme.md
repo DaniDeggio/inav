@@ -1,3 +1,5 @@
+>Changed DAKEFPVF722 to support DPS310
+
 # INAV - navigation capable flight controller
 
 # F411 PSA

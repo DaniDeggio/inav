@@ -74,9 +74,12 @@
 
 //Baro 
 #define USE_BARO
-#define USE_BARO_BMP280
-#define BMP280_SPI_BUS          BUS_SPI2
-#define BMP280_CS_PIN           PA13
+#define USE_BARO_DPS310
+#define DPS310_SPI_BUS         BUS_SPI2
+#define DPS310_CS_PIN           PA13
+
+// camera control
+#define CAMERA_CONTROL_PIN      PB0
 
 // M25P256 flash
 #define USE_FLASHFS
