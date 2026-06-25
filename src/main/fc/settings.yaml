@@ -2028,7 +2028,7 @@ groups:
         min: 100
         max: 900
       - name: dterm_lpf_hz
-        description: "Dterm low pass filter cutoff frequency. Default setting is very conservative and small multirotors should use higher value between 80 and 100Hz. 80 seems like a gold spot for 7-inch builds while 100 should work best with 5-inch machines. If motors are getting too hot, lower the value"
+        description: "Dterm low pass filter cutoff frequency."
         default_value: 110
         min: 0
         max: 500
@@ -2359,27 +2359,23 @@ groups:
         min: 1
         max: 500
       - name: adrc_mode
-        description: "ADRC (Active Disturbance Rejection Control) mode. `OFF` disables ADRC and uses traditional PID. `MC` enables ADRC for multirotor platforms. `FW` enables ADRC for fixed-wing platforms"
         field: adrcMode
         table: adrcModeTable
         condition: USE_ADRC
         default_value: "OFF"
       - name: adrc_wc
-        description: "ADRC control bandwidth (wc) in rad/s. Higher values result in faster response but may introduce noise. Default 30 rad/s for MC, 15 rad/s for FW"
         field: adrcWc
         condition: USE_ADRC
         min: 5
         max: 100
         default_value: 30
       - name: adrc_wo
-        description: "ADRC observer bandwidth (wo) in rad/s. Controls how quickly the ESO estimates disturbances. Typically 2-3x wc. Default 90 rad/s for MC, 45 rad/s for FW"
         field: adrcWo
         condition: USE_ADRC
         min: 10
         max: 200
         default_value: 90
-      - name: adrc_b0
-        description: "ADRC system gain estimate (b0). Represents the plant gain. Higher values indicate a more responsive system. Default 500 for MC, 300 for FW"
+      - name: adrc_gain
         field: adrcB0
         condition: USE_ADRC
         min: 50

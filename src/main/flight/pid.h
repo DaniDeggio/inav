@@ -221,8 +221,6 @@ float getTotalRateTarget(void);
 
 #ifdef USE_ADRC
 void adrcResetState(void);
-void adrcUpdateState(pidState_t *pidState, float gyroRate, float dT);
-float adrcComputeControl(pidState_t *pidState, float rateTarget, float dT);
 bool adrcShouldBeActive(uint8_t adrcMode);
 #endif
 void pidResetTPAFilter(void);

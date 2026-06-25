@@ -1774,17 +1774,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->navTargetHeading = navDesiredHeading;
     blackboxCurrent->navSurface = navActualSurface;
 
-#ifdef USE_ADRC
-    const pidProfile_t *pidProfile = pidProfile();
-    if (pidProfile->adrcMode != ADRC_DISABLED) {
-        for (int i = 0; i < XYZ_AXIS_COUNT; i++) {
-            blackboxCurrent->adrcZ1[i] = lrintf(pidState[i].adrc_z1);
-            blackboxCurrent->adrcZ2[i] = lrintf(pidState[i].adrc_z2);
-            blackboxCurrent->adrcZ3[i] = lrintf(pidState[i].adrc_z3);
-            blackboxCurrent->adrcOutput[i] = lrintf(pidState[i].adrc_lastOutput);
-        }
-    }
-#endif
+
 }
 
 /**

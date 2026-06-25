@@ -173,9 +173,8 @@ static EXTENDED_FASTRAM float iTermAntigravityGain;
 #endif
 static EXTENDED_FASTRAM uint8_t usedPidControllerType;
 
-#ifdef USE_ADRC
-static EXTENDED_FASTRAM bool adrcGainsUpdateRequired = false;
-#endif
+// NOTE: adrcGainsUpdateRequired removed — ADRC parameters are read directly from
+// pidProfile() each cycle; no cached gains update mechanism is needed.
 
 typedef void (*pidControllerFnPtr)(pidState_t *pidState, float dT, float dT_inv);
 static EXTENDED_FASTRAM pidControllerFnPtr pidControllerApplyFn;
@@ -232,14 +231,14 @@ void adrcResetState(void)
  *   b0: system gain estimate
  *   u_last: last control output
  */
-void adrcUpdateState(pidState_t *pidState, float gyroRate, float dT)
+static void adrcUpdateState(pidState_t *pidState, float gyroRate, float dT)
 {
-    const pidProfile_t *pidProfile = pidProfile();
+    const pidProfile_t *pidProf = pidProfile();
     
     // Get ADRC parameters from profile
-    float wc = pidProfile->adrcWc;
-    float wo = pidProfile->adrcWo;
-    float b0 = pidProfile->adrcB0;
+    float wc = pidProf->adrcWc;
+    float wo = pidProf->adrcWo;
+    float b0 = pidProf->adrcB0;
     
     // Apply fallback values if parameters are invalid
     if (wc < 1.0f) wc = 10.0f;
@@ -279,24 +278,19 @@ void adrcUpdateState(pidState_t *pidState, float gyroRate, float dT)
  *   z2: estimated disturbance from ESO
  *   b0: system gain estimate
  */
-float adrcComputeControl(pidState_t *pidState, float rateTarget, float dT)
+static float adrcComputeControl(pidState_t *pidState, float rateTarget, float dT)
 {
-    const pidProfile_t *pidProfile = pidProfile();
+    const pidProfile_t *pidProf = pidProfile();
     
     // Get ADRC parameters from profile
-    float wc = pidProfile->adrcWc;
-    float wo = pidProfile->adrcWo;
-    float b0 = pidProfile->adrcB0;
+    float wc = pidProf->adrcWc;
+    float wo = pidProf->adrcWo;
+    float b0 = pidProf->adrcB0;
     
     // Apply fallback values if parameters are invalid
     if (wc < 1.0f) wc = 10.0f;
     if (wo < 1.0f) wo = 30.0f;
     if (b0 < 1.0f) b0 = 500.0f;
-    
-    // Calculate ESO gains
-    float beta1 = 3.0f * wo;
-    float beta2 = 3.0f * wo * wo;
-    float beta3 = wo * wo * wo;
     
     // Calculate control law gains (virtual PD)
     float kp = wc * wc;
@@ -304,14 +298,24 @@ float adrcComputeControl(pidState_t *pidState, float rateTarget, float dT)
     
     // Update ESO
     adrcUpdateState(pidState, pidState->gyroRate, dT);
-    
-    // Compute control output
-    // u = (kp * (setpoint - z1) - kd * z2) / b0
-    float adrcOutput = (kp * (rateTarget - pidState->adrc_z1) - kd * pidState->adrc_z2) / b0;
-    
-    // Store last output for ESO feedback
+
+    // Compute control output — full ADRC law:
+    //   u = (kp*(setpoint - z1) - kd*z2 - z3) / b0
+    //
+    // The three terms map to:
+    //   kp*(setpoint - z1)/b0  →  proportional error on estimated state
+    //   -kd*z2/b0              →  damping via estimated disturbance derivative
+    //   -z3/b0                 →  active rejection of total disturbance (wind, prop-wash, etc.)
+    //
+    // NOTE: z3 MUST be included — without it the observer estimates disturbances but
+    // never cancels them, reducing ADRC to a plain PD controller.
+    float adrcOutput = (kp * (rateTarget - pidState->adrc_z1)
+                        - kd * pidState->adrc_z2
+                        - pidState->adrc_z3) / b0;
+
+    // Store last output for ESO feedback (used as 'u_last' in next ESO cycle)
     pidState->adrc_lastOutput = adrcOutput;
-    
+
     return adrcOutput;
 }
 
@@ -1008,16 +1012,19 @@ static void NOINLINE pidApplyFixedWingRateController(pidState_t *pidState, float
     const uint16_t limit = pidState->pidSumLimit;
 
 #ifdef USE_ADRC
-    /* ADRC mode: use ADRC control law instead of traditional PID */
-    if (pidState->attenuation.aP != 0 && adrcShouldBeActive(pidProfile()->adrcMode)) {
-        /* ESO already updated inside adrcComputeControl */
+    /* ADRC mode: use ADRC control law instead of traditional PIFF */
+    if (adrcShouldBeActive(pidProfile()->adrcMode)) {
+        /* ESO update + full ADRC control law (P + D + disturbance rejection via z3) */
         float adrcOutput = adrcComputeControl(pidState, rateTarget, dT);
 
-        /* Apply feedforward (ADRC handles disturbance, FF handles setpoint tracking) */
+        /* Add feedforward: ADRC rejects disturbances, FF improves setpoint tracking */
         float newFFTerm = rateTarget * pidState->kFF;
         float adrcOutputWithFF = adrcOutput + newFFTerm;
 
-        /* Apply anti-windup limiting */
+        /* Update lastOutput to include FF so ESO feedback reflects actual motor command */
+        pidState->adrc_lastOutput = adrcOutputWithFF;
+
+        /* Apply output limiting */
         float adrcOutputLimited = constrainf(adrcOutputWithFF, -limit, +limit);
 
         applyItermLimiting(pidState);
@@ -1115,20 +1122,21 @@ static void FAST_CODE NOINLINE pidApplyMulticopterRateController(pidState_t *pid
 
 #ifdef USE_ADRC
     /* ADRC mode: use ADRC control law instead of traditional PID */
-    if (pidState->attenuation.aP != 0 && adrcShouldBeActive(pidProfile()->adrcMode)) {
-        /* ESO already updated inside adrcComputeControl */
+    if (adrcShouldBeActive(pidProfile()->adrcMode)) {
+        /* ESO update + full ADRC control law (P + D + disturbance rejection via z3) */
         float adrcOutput = adrcComputeControl(pidState, rateTarget, dT);
 
-        /* Apply anti-windup limiting */
+        /* Apply output limiting */
         float adrcOutputLimited = constrainf(adrcOutput, -limit, +limit);
 
-        /* Don't grow I-term if motors are at their limit (ESO handles disturbance) */
+        /* Don't grow I-term if motors are at limit (ESO handles disturbance rejection) */
         applyItermLimiting(pidState);
 
         axisPID[pidState->axis] = adrcOutputLimited;
 
 #ifdef USE_BLACKBOX
-        /* Report ADRC states for debugging */
+        /* Report ADRC states for debugging:
+         * P = total output, I = z3 (disturbance estimate), D = -z2 (disturbance derivative) */
         axisPID_P[pidState->axis] = adrcOutputLimited;
         axisPID_I[pidState->axis] = pidState->adrc_z3;  // ESO total disturbance estimate
         axisPID_D[pidState->axis] = -pidState->adrc_z2; // ESO disturbance derivative
