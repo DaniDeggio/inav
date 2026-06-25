@@ -256,6 +256,20 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"mcSurfaceD", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(MC_NAV)},
     {"mcSurfaceOut",-1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(MC_NAV)},
 
+    /* ADRC ESO states (only logged when ADRC is enabled): */
+    {"adrcZ1",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcZ1",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcZ1",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcZ2",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcZ2",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcZ2",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcZ3",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcZ3",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcZ3",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcOutput",  0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcOutput",  1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+    {"adrcOutput",  2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ADRC)},
+
     /* rcData are encoded together as a group: */
     {"rcData",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), FLIGHT_LOG_FIELD_CONDITION_RC_DATA},
     {"rcData",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), FLIGHT_LOG_FIELD_CONDITION_RC_DATA},
@@ -538,6 +552,13 @@ typedef struct blackboxMainState_s {
     int16_t navHeading;
     uint16_t navTargetHeading;
     int16_t navSurface;
+
+#ifdef USE_ADRC
+    int32_t adrcZ1[XYZ_AXIS_COUNT];
+    int32_t adrcZ2[XYZ_AXIS_COUNT];
+    int32_t adrcZ3[XYZ_AXIS_COUNT];
+    int32_t adrcOutput[XYZ_AXIS_COUNT];
+#endif
 } blackboxMainState_t;
 
 typedef struct blackboxGpsState_s {
@@ -787,6 +808,11 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
 
     case FLIGHT_LOG_FIELD_CONDITION_GYRO_PEAKS_YAW:
         return blackboxIncludeFlag(BLACKBOX_FEATURE_GYRO_PEAKS_YAW);
+
+#ifdef USE_ADRC
+    case FLIGHT_LOG_FIELD_CONDITION_ADRC:
+        return pidProfile()->adrcMode != ADRC_DISABLED;
+#endif
 
     case FLIGHT_LOG_FIELD_CONDITION_NEVER:
         return false;
@@ -1747,6 +1773,18 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
     blackboxCurrent->navTargetHeading = navDesiredHeading;
     blackboxCurrent->navSurface = navActualSurface;
+
+#ifdef USE_ADRC
+    const pidProfile_t *pidProfile = pidProfile();
+    if (pidProfile->adrcMode != ADRC_DISABLED) {
+        for (int i = 0; i < XYZ_AXIS_COUNT; i++) {
+            blackboxCurrent->adrcZ1[i] = lrintf(pidState[i].adrc_z1);
+            blackboxCurrent->adrcZ2[i] = lrintf(pidState[i].adrc_z2);
+            blackboxCurrent->adrcZ3[i] = lrintf(pidState[i].adrc_z3);
+            blackboxCurrent->adrcOutput[i] = lrintf(pidState[i].adrc_lastOutput);
+        }
+    }
+#endif
 }
 
 /**

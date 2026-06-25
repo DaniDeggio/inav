@@ -55,6 +55,20 @@ FP-PID has been rescaled to match LuxFloat (and MWRewrite) from Cleanflight 1.13
 
 #define TASK_AUX_RATE_HZ   100 //In Hz
 
+// === ADRC Configuration ===
+#ifdef USE_ADRC
+#define ADRC_WC_SCALE       1.0f
+#define ADRC_WO_SCALE       1.0f
+#define ADRC_B0_SCALE       10.0f
+#define ADRC_B0_FALLBACK    50.0f
+
+typedef enum {
+    ADRC_DISABLED = 0,
+    ADRC_ENABLED_MC,
+    ADRC_ENABLED_FW
+} adrcMode_e;
+#endif
+
 typedef enum {
     /* PID              MC      FW  */
     PID_ROLL,       //   +       +
@@ -77,6 +91,9 @@ typedef enum {
     PID_TYPE_PID,   // Uses P, I and D terms
     PID_TYPE_PIFF,  // Uses P, I, D and FF
     PID_TYPE_AUTO,  // Autodetect
+#ifdef USE_ADRC
+    PID_TYPE_ADRC,  // ADRC controller
+#endif
 } pidType_e;
 
 typedef struct pid8_s {
@@ -157,6 +174,12 @@ typedef struct pidProfile_s {
     uint16_t smithPredictorFilterHz;
 #endif
 
+#ifdef USE_ADRC
+    uint8_t adrcMode;                       // ADRC mode: ADRC_DISABLED, ADRC_ENABLED_MC, ADRC_ENABLED_FW
+    float adrcWc;                           // Control bandwidth (rad/s)
+    float adrcWo;                           // Observer bandwidth (rad/s)
+    float adrcB0;                           // System gain estimate
+#endif
 
     uint16_t fwItermLockTimeMaxMs;
     uint8_t fwItermLockRateLimit;
@@ -195,6 +218,13 @@ void pidResetErrorAccumulators(void);
 void pidReduceErrorAccumulators(int8_t delta, uint8_t axis);
 float getAxisIterm(uint8_t axis);
 float getTotalRateTarget(void);
+
+#ifdef USE_ADRC
+void adrcResetState(void);
+void adrcUpdateState(pidState_t *pidState, float gyroRate, float dT);
+float adrcComputeControl(pidState_t *pidState, float rateTarget, float dT);
+bool adrcShouldBeActive(uint8_t adrcMode);
+#endif
 void pidResetTPAFilter(void);
 
 struct controlConfig_s;

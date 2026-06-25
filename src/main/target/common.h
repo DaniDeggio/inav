@@ -121,6 +121,9 @@
 #define USE_D_BOOST
 #define USE_ANTIGRAVITY
 
+// ADRC - Active Disturbance Rejection Control
+#define USE_ADRC
+
 #define USE_I2C_IO_EXPANDER
 
 #define USE_TELEMETRY_SIM
